@@ -12,7 +12,7 @@
 
     var moment,
         VERSION = "2.4.0",
-        round = Math.round,
+        round = Math.round ,
         i,
 
         YEAR = 0,
@@ -1413,11 +1413,11 @@
             hours = round(minutes / 60),
             days = round(hours / 24),
             years = round(days / 365),
-            args = seconds < 45 && ['s', seconds] ||
+            args = seconds < 60 && ['s', seconds] || // modified by mamzellejuu :: Previous was 45 ( want more precision )
                 minutes === 1 && ['m'] ||
-                minutes < 45 && ['mm', minutes] ||
+                minutes < 60 && ['mm', minutes] || // modified by mamzellejuu :: Previous was 45 ( want more precision )
                 hours === 1 && ['h'] ||
-                hours < 22 && ['hh', hours] ||
+                hours < 24 && ['hh', hours] || // modified by mamzellejuu :: Previous was 22 ( want more precision )
                 days === 1 && ['d'] ||
                 days <= 25 && ['dd', days] ||
                 days <= 45 && ['M'] ||

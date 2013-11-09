@@ -12,7 +12,7 @@
 
     var moment,
         VERSION = "2.4.0",
-        round = Math.round ,
+        round = Math.floor,// want more rounded down
         i,
 
         YEAR = 0,

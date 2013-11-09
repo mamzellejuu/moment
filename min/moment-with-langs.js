@@ -12,7 +12,7 @@
 
     var moment,
         VERSION = "2.4.0",
-        round = Math.round,
+        round = Math.floor,// want more rounded down
         i,
 
         YEAR = 0,
@@ -27,7 +27,7 @@
         languages = {},
 
         // check for nodeJS
-        hasModule = (typeof module !== 'undefined' && module.exports),
+        hasModule = (typeof module !== 'undefined' && module.exports && typeof require !== 'undefined'),
 
         // ASP.NET json date format regex
         aspNetJsonRegex = /^\/?Date\((\-?\d+)/i,
@@ -297,9 +297,6 @@
             minutes = normalizedInput.minute || 0,
             seconds = normalizedInput.second || 0,
             milliseconds = normalizedInput.millisecond || 0;
-
-        // store reference to input for deterministic cloning
-        this._input = duration;
 
         // representation for dateAddRemove
         this._milliseconds = +milliseconds +
@@ -1416,11 +1413,11 @@
             hours = round(minutes / 60),
             days = round(hours / 24),
             years = round(days / 365),
-            args = seconds < 45 && ['s', seconds] ||
+            args = seconds < 60 && ['s', seconds] || // modified by mamzellejuu :: Previous was 45 ( want more precision )
                 minutes === 1 && ['m'] ||
-                minutes < 45 && ['mm', minutes] ||
+                minutes < 60 && ['mm', minutes] || // modified by mamzellejuu :: Previous was 45 ( want more precision )
                 hours === 1 && ['h'] ||
-                hours < 22 && ['hh', hours] ||
+                hours < 24 && ['hh', hours] || // modified by mamzellejuu :: Previous was 22 ( want more precision )
                 days === 1 && ['d'] ||
                 days <= 25 && ['dd', days] ||
                 days <= 45 && ['M'] ||
@@ -1559,9 +1556,7 @@
 
     // duration
     moment.duration = function (input, key) {
-        var isDuration = moment.isDuration(input),
-            isNumber = (typeof input === 'number'),
-            duration = (isDuration ? input._input : (isNumber ? {} : input)),
+        var duration = input,
             // matching against regexp is expensive, do it on demand
             match = null,
             sign,
@@ -1570,7 +1565,14 @@
             timeEmpty,
             dateTimeEmpty;
 
-        if (isNumber) {
+        if (moment.isDuration(input)) {
+            duration = {
+                ms: input._milliseconds,
+                d: input._days,
+                M: input._months
+            };
+        } else if (typeof input === 'number') {
+            duration = {};
             if (key) {
                 duration[key] = input;
             } else {
@@ -1609,7 +1611,7 @@
 
         ret = new Duration(duration);
 
-        if (isDuration && input.hasOwnProperty('_lang')) {
+        if (moment.isDuration(input) && input.hasOwnProperty('_lang')) {
             ret._lang = input._lang;
         }
 
@@ -4828,6 +4830,160 @@
     });
 }));
 // moment.js language configuration
+// language : Luxembourgish (lb)
+// author : mweimerskirch : https://github.com/mweimerskirch
+
+// Note: Luxembourgish has a very particular phonological rule ("Eifeler Regel") that causes the
+// deletion of the final "n" in certain contexts. That's what the "eifelerRegelAppliesToWeekday"
+// and "eifelerRegelAppliesToNumber" methods are meant for
+
+(function (factory) {
+    factory(moment);
+}(function (moment) {
+    function processRelativeTime(number, withoutSuffix, key, isFuture) {
+        var format = {
+            'm': ['eng Minutt', 'enger Minutt'],
+            'h': ['eng Stonn', 'enger Stonn'],
+            'd': ['een Dag', 'engem Dag'],
+            'dd': [number + ' Deeg', number + ' Deeg'],
+            'M': ['ee Mount', 'engem Mount'],
+            'MM': [number + ' Méint', number + ' Méint'],
+            'y': ['ee Joer', 'engem Joer'],
+            'yy': [number + ' Joer', number + ' Joer']
+        };
+        return withoutSuffix ? format[key][0] : format[key][1];
+    }
+
+    function processFutureTime(string) {
+        var number = string.substr(0, string.indexOf(' '));
+        if (eifelerRegelAppliesToNumber(number)) {
+            return "a " + string;
+        }
+        return "an " + string;
+    }
+
+    function processPastTime(string) {
+        var number = string.substr(0, string.indexOf(' '));
+        if (eifelerRegelAppliesToNumber(number)) {
+            return "viru " + string;
+        }
+        return "virun " + string;
+    }
+
+    function processLastWeek(string1) {
+        var weekday = this.format('d');
+        if (eifelerRegelAppliesToWeekday(weekday)) {
+            return '[Leschte] dddd [um] LT';
+        }
+        return '[Leschten] dddd [um] LT';
+    }
+
+    /**
+     * Returns true if the word before the given week day loses the "-n" ending.
+     * e.g. "Leschten Dënschdeg" but "Leschte Méindeg"
+     *
+     * @param weekday {integer}
+     * @returns {boolean}
+     */
+    function eifelerRegelAppliesToWeekday(weekday) {
+        weekday = parseInt(weekday);
+        switch (weekday) {
+            case 0: // Sonndeg
+            case 1: // Méindeg
+            case 3: // Mëttwoch
+            case 5: // Freideg
+            case 6: // Samschdeg
+                return true;
+            default: // 2 Dënschdeg, 4 Donneschdeg
+                return false;
+        }
+    }
+
+    /**
+     * Returns true if the word before the given number loses the "-n" ending.
+     * e.g. "an 10 Deeg" but "a 5 Deeg"
+     *
+     * @param number {integer}
+     * @returns {boolean}
+     */
+    function eifelerRegelAppliesToNumber(number) {
+        number = parseInt(number);
+        if (isNaN(number)) {
+            return false;
+        }
+        if (number < 0) {
+            // Negative Number --> always true
+            return true;
+        } else if (number < 10) {
+            // Only 1 digit
+            if (4 <= number && number <= 7) {
+                return true;
+            }
+            return false;
+        } else if (number < 100) {
+            // 2 digits
+            var lastDigit = number % 10, firstDigit = number / 10;
+            if (lastDigit === 0) {
+                return eifelerRegelAppliesToNumber(firstDigit);
+            }
+            return eifelerRegelAppliesToNumber(lastDigit);
+        } else if (number < 10000) {
+            // 3 or 4 digits --> recursively check first digit
+            while (number >= 10) {
+                number = number / 10;
+            }
+            return eifelerRegelAppliesToNumber(number);
+        } else {
+            // Anything larger than 4 digits: recursively check first n-3 digits
+            number = number / 1000;
+            return eifelerRegelAppliesToNumber(number);
+        }
+    }
+
+    return moment.lang('lb', {
+        months: "Januar_Februar_Mäerz_Abrëll_Mee_Juni_Juli_August_September_Oktober_November_Dezember".split("_"),
+        monthsShort: "Jan._Febr._Mrz._Abr._Mee_Jun._Jul._Aug._Sept._Okt._Nov._Dez.".split("_"),
+        weekdays: "Sonndeg_Méindeg_Dënschdeg_Mëttwoch_Donneschdeg_Freideg_Samschdeg".split("_"),
+        weekdaysShort: "So._Mé._Dë._Më._Do._Fr._Sa.".split("_"),
+        weekdaysMin: "So_Mé_Dë_Më_Do_Fr_Sa".split("_"),
+        longDateFormat: {
+            LT: "H:mm [Auer]",
+            L: "DD.MM.YYYY",
+            LL: "D. MMMM YYYY",
+            LLL: "D. MMMM YYYY LT",
+            LLLL: "dddd, D. MMMM YYYY LT"
+        },
+        calendar: {
+            sameDay: "[Haut um] LT",
+            sameElse: "L",
+            nextDay: '[Muer um] LT',
+            nextWeek: 'dddd [um] LT',
+            lastDay: '[Gëschter um] LT',
+            lastWeek: processLastWeek
+        },
+        relativeTime: {
+            future: processFutureTime,
+            past: processPastTime,
+            s: "e puer Sekonnen",
+            m: processRelativeTime,
+            mm: "%d Minutten",
+            h: processRelativeTime,
+            hh: "%d Stonnen",
+            d: processRelativeTime,
+            dd: processRelativeTime,
+            M: processRelativeTime,
+            MM: processRelativeTime,
+            y: processRelativeTime,
+            yy: processRelativeTime
+        },
+        ordinal: '%d.',
+        week: {
+            dow: 1, // Monday is the first day of the week.
+            doy: 4  // The week that contains Jan 4th is the first week of the year.
+        }
+    });
+}));
+// moment.js language configuration
 // language : Lithuanian (lt)
 // author : Mindaugas Mozūras : https://github.com/mmozuras
 
@@ -5691,15 +5847,31 @@
 (function (factory) {
     factory(moment);
 }(function (moment) {
+    function relativeTimeWithPlural(number, withoutSuffix, key) {
+        var format = {
+            'mm': 'minute',
+            'hh': 'ore',
+            'dd': 'zile',
+            'MM': 'luni',
+            'yy': 'ani'
+        },
+            separator = ' ';
+        if (number % 100 >= 20 || (number >= 100 && number % 100 === 0)) {
+            separator = ' de ';
+        }
+
+        return number + separator + format[key];
+    }
+
     return moment.lang('ro', {
-        months : "Ianuarie_Februarie_Martie_Aprilie_Mai_Iunie_Iulie_August_Septembrie_Octombrie_Noiembrie_Decembrie".split("_"),
-        monthsShort : "Ian_Feb_Mar_Apr_Mai_Iun_Iul_Aug_Sep_Oct_Noi_Dec".split("_"),
-        weekdays : "Duminică_Luni_Marţi_Miercuri_Joi_Vineri_Sâmbătă".split("_"),
+        months : "ianuarie_februarie_martie_aprilie_mai_iunie_iulie_august_septembrie_octombrie_noiembrie_decembrie".split("_"),
+        monthsShort : "ian_feb_mar_apr_mai_iun_iul_aug_sep_oct_noi_dec".split("_"),
+        weekdays : "duminică_luni_marți_miercuri_joi_vineri_sâmbătă".split("_"),
         weekdaysShort : "Dum_Lun_Mar_Mie_Joi_Vin_Sâm".split("_"),
         weekdaysMin : "Du_Lu_Ma_Mi_Jo_Vi_Sâ".split("_"),
         longDateFormat : {
             LT : "H:mm",
-            L : "DD/MM/YYYY",
+            L : "DD.MM.YYYY",
             LL : "D MMMM YYYY",
             LLL : "D MMMM YYYY H:mm",
             LLLL : "dddd, D MMMM YYYY H:mm"
@@ -5717,15 +5889,15 @@
             past : "%s în urmă",
             s : "câteva secunde",
             m : "un minut",
-            mm : "%d minute",
+            mm : relativeTimeWithPlural,
             h : "o oră",
-            hh : "%d ore",
+            hh : relativeTimeWithPlural,
             d : "o zi",
-            dd : "%d zile",
+            dd : relativeTimeWithPlural,
             M : "o lună",
-            MM : "%d luni",
+            MM : relativeTimeWithPlural,
             y : "un an",
-            yy : "%d ani"
+            yy : relativeTimeWithPlural
         },
         week : {
             dow : 1, // Monday is the first day of the week.
@@ -6210,9 +6382,9 @@
         relativeTime : {
             future : "në %s",
             past : "%s me parë",
-            s : "disa seconda",
+            s : "disa sekonda",
             m : "një minut",
-            mm : "%d minutea",
+            mm : "%d minuta",
             h : "një orë",
             hh : "%d orë",
             d : "një ditë",
